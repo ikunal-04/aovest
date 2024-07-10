@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 
