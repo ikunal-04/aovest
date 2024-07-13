@@ -14,7 +14,7 @@ const createAuthSlice: StateCreator<
   [["zustand/immer", never], never],
   [],
   AuthSlice
-> = (set, get) => ({
+> = (set) => ({
   authState: initialAuthState,
   authActions: {
     login: async (value: AuthState) => {

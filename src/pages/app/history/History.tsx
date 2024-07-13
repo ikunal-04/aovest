@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 export default function HistoryPage() {
   const tabRef1 = React.useRef<null | HTMLLIElement>(null);
   const tabRef2 = React.useRef<null | HTMLLIElement>(null);
-  const [selectedTab, setSelectedTab] = React.useState<
+  const [, setSelectedTab] = React.useState<
     "Outgoing Streams" | "Incoming Streams"
   >("Outgoing Streams");
   const [position, setPosition] = React.useState({
