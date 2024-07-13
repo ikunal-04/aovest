@@ -1,19 +1,31 @@
-import SVG from 'react-inlinesvg'
-import { Link } from 'react-router-dom'
+import SVG from "react-inlinesvg";
+import { Link, useLocation } from "react-router-dom";
 
-import ConnectBtn from './ConnectBtn'
+import ConnectBtn from "./ConnectBtn";
+import clsx from "clsx";
 
 export default function Navbar() {
+  const { pathname } = useLocation();
+
   return (
-    <div className="px-[70px] py-[30px] bg-aovest-bg flex items-center justify-between w-full">
+    <div
+      className={clsx(
+        "px-[70px] py-[30px] bg-aovest-bg flex items-center justify-between w-full",
+        {
+          "border-b-[1px] border-b-[#414573]": pathname !== "/",
+        }
+      )}
+    >
       <div className="flex items-center">
-        <SVG src="/logo.svg" />
+        <Link to={"/"}>
+          <SVG src="/logo.svg" />
+        </Link>
       </div>
       <div className="flex items-center gap-4">
         <Link to="/app/vest" className="text-lg text-white font-medium">
           Vest
         </Link>
-        <Link to="/app/dashboard" className=" text-lg text-white font-medium">
+        <Link to="/app/history" className=" text-lg text-white font-medium">
           History
         </Link>
       </div>
@@ -21,5 +33,5 @@ export default function Navbar() {
         <ConnectBtn />
       </div>
     </div>
-  )
+  );
 }
