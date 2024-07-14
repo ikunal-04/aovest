@@ -16,6 +16,55 @@ if Denomination ~= 0 then Denomination = 0 end
 
 StreamId = tostring(0)
 
+Handlers.add('process-mint', Handlers.utils.hasMatchingTag('Action', 'Process-Mint'), function(msg) 
+  assert(type(msg.Quantity) == 'string', 'Quantity is required!')
+
+   if not Balances[ao.id] then Balances[ao.id] = tonumber("0") end
+
+   if msg.From == ao.id then
+       -- Add tokens to the token pool, according to Quantity
+       Balances[msg.From] = Balances[ao.id] + msg.Quantity
+       ao.send({
+          Target = msg.From,
+          Data = "Successfully minted " .. msg.Quantity
+       })
+   else
+       ao.send({
+           Target = msg.From,
+           Action = 'Mint-Error',
+           ['Message-Id'] = msg.Id,
+           Error = 'Only the Process Owner can mint new ' .. Ticker .. ' tokens!'
+       })
+   end
+ end
+)
+
+Handlers.add('user-mint', Handlers.utils.hasMatchingTag('Action', 'User-Mint'), function(msg) 
+ local quantity = 1000;
+
+ if Balances[ao.id] < quantity then
+   return ao.send({
+           Target = ao.id,
+           Tags = {
+               Action = 'ProcessStream-Error',
+               Error = 'StreamId is required'
+           }
+       })
+ end
+
+ Balances[ao.id] = Balances[ao.id] - quantity
+ Balances[msg.From] = (Balances[msg.From] or 0) + quantity
+ print('Minted: ' .. quantity .. ' to ' .. msg.From)
+ ao.send({
+   Target = msg.From,
+   Tags = {
+     Action = 'Mint-Success',
+     QuantityMinted = tostring(quantity)
+   }
+ })
+ end
+)
+
 Handlers.add('createStream', Handlers.utils.hasMatchingTag('Action', 'CreateStream'), function(msg)
   if not msg.Tags.Sender or not msg.Tags.Recipient or not msg.Tags.Quantity or not msg.Tags.StartTime or not msg.Tags.VestingPeriod then
     return ao.send({
@@ -49,7 +98,7 @@ Handlers.add('createStream', Handlers.utils.hasMatchingTag('Action', 'CreateStre
   print('Quantity: '.. quantity)
   print('Balances[ao.id]: '.. Balances[ao.id])
 
-  assert(Balances[ao.id] and tonumber(Balances[ao.id]) >= quantity, 'Insufficient Balance to create stream')
+  assert(Balances[sender] and tonumber(Balances[sender]) >= quantity, 'Insufficient Balance to create stream')
 
   local status = ''
 
@@ -87,6 +136,8 @@ Handlers.add('createStream', Handlers.utils.hasMatchingTag('Action', 'CreateStre
     TotalSent = 0,
     Status = status
   }
+
+  Balances[sender] = Balances[sender] - quantity
 
   local streamId = tostring(StreamId)
 
@@ -219,55 +270,99 @@ Handlers.add(
   end
 )
 
-Handlers.add('getStreamsByUser', Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'), function(msg)
-  
-  if not msg.Tags.UserId then
-    return ao.send({
-      Target = ao.id,
-      Tags = {
-        Action = 'GetStreamsByUser-Error',
-        Error = 'UserId is required'
-      }
-    })
-  end
-
-  assert(type(msg.Tags.UserId) == 'string', 'UserId is required!')
-
-  local userId = msg.Tags.UserId
-  local userStreams = {}
-
-  for streamId, stream in pairs(Streams) do
-    print('Stream Sender: '.. stream.Sender)
-    if stream.Sender == userId then
-      table.insert(userStreams, {
-        StreamId = streamId,
-        Stream = stream,
-        Status = stream.Status,
-        VestingPeriod = tostring(stream.VestingPeriod),
-        Quantity = tostring(stream.Quantity)
-      })
+Handlers.add('getStreamsByUser', Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'),function(msg)
+     if not msg.Tags.UserId then
+        return ao.send({
+            Target = ao.id,
+            Tags = {
+                Action = 'GetStreamsByUser-Error',
+                Error = 'UserId is required'
+            }
+        })
     end
-  end
-  print('User Streams: '.. json.encode(userStreams))
 
-  -- Check if user has created any streams
-  if #userStreams == 0 then
-    return ao.send({
-      Target = ao.id,
-      Tags = {
-        Action = 'GetStreamsByUser-Error',
-        Error = 'No streams found for the user'
-      }
+    assert(type(msg.Tags.UserId) == 'string', 'UserId is required!')
+
+    local userId = msg.Tags.UserId
+    local streams = {sent = {}, received = {}}
+
+    for streamId, stream in pairs(Streams) do
+        print('Stream Sender: ' .. stream.Sender)
+        if stream.Sender == userId then
+            table.insert(streams.sent, {
+                StreamId = streamId,
+                Stream = stream,
+                Status = stream.Status,
+                VestingPeriod = tostring(stream.VestingPeriod),
+                Quantity = tostring(stream.Quantity)
+            })
+        elseif stream.Recipient == userId then
+            table.insert(streams.received, {
+                StreamId = streamId,
+                Stream = stream,
+                Status = stream.Status,
+                VestingPeriod = tostring(stream.VestingPeriod),
+                Quantity = tostring(stream.Quantity)
+            })
+        end
+    end
+    print('User Streams: ' .. json.encode(streams))
+
+    ao.send({
+        Target = ao.id,
+        Tags = {
+            Action = 'GetStreamsByUser-Success',
+            Streams = json.encode(streams)
+        }
     })
-  end
+end)Handlers.add('getStreamsByUser',
+             Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'),
+             function(msg)
 
-  ao.send({
-    Target = ao.id,
-    Tags = {
-      Action = 'GetStreamsByUser-Success',
-      Streams = json.encode(userStreams)
-    }
-  })
+    if not msg.Tags.UserId then
+        return ao.send({
+            Target = ao.id,
+            Tags = {
+                Action = 'GetStreamsByUser-Error',
+                Error = 'UserId is required'
+            }
+        })
+    end
+
+    assert(type(msg.Tags.UserId) == 'string', 'UserId is required!')
+
+    local userId = msg.Tags.UserId
+    local streams = {sent = {}, received = {}}
+
+    for streamId, stream in pairs(Streams) do
+        print('Stream Sender: ' .. stream.Sender)
+        if stream.Sender == userId then
+            table.insert(streams.sent, {
+                StreamId = streamId,
+                Stream = stream,
+                Status = stream.Status,
+                VestingPeriod = tostring(stream.VestingPeriod),
+                Quantity = tostring(stream.Quantity)
+            })
+        elseif stream.Recipient == userId then
+            table.insert(streams.received, {
+                StreamId = streamId,
+                Stream = stream,
+                Status = stream.Status,
+                VestingPeriod = tostring(stream.VestingPeriod),
+                Quantity = tostring(stream.Quantity)
+            })
+        end
+    end
+    print('User Streams: ' .. json.encode(streams))
+
+    ao.send({
+        Target = ao.id,
+        Tags = {
+            Action = 'GetStreamsByUser-Success',
+            Streams = json.encode(streams)
+        }
+    })
 end)
 
 -- Read Stream

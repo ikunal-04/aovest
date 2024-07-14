@@ -7,10 +7,19 @@ import { useActiveAddress } from "@arweave-wallet-kit-beta/react";
 export default function HistoryPage() {
   const tabRef1 = React.useRef<null | HTMLLIElement>(null);
   const tabRef2 = React.useRef<null | HTMLLIElement>(null);
-  const [data, setData] = React.useState<object[]>([]);
+  const [data, setData] = React.useState<{
+    sent: object[];
+    received: object[];
+  }>({
+    sent: [],
+    received: [],
+  });
+  const [tableData, setTableData] = React.useState<object[]>([]);
   const activeAddress = useActiveAddress();
 
-  const [, setSelectedTab] = React.useState<"Outgoing Streams" | "Incoming Streams">("Outgoing Streams");
+  const [, setSelectedTab] = React.useState<
+    "Outgoing Streams" | "Incoming Streams"
+  >("Outgoing Streams");
   const [position, setPosition] = React.useState({
     left: 0,
     width: 0,
@@ -35,21 +44,24 @@ export default function HistoryPage() {
         data: "",
         tags: [
           { name: "Action", value: "GetStreamsByUser" },
-          { name: "UserId", value: activeAddress || "" }
+          { name: "UserId", value: activeAddress || "" },
         ],
       });
-  
-      const[parsedPosts]  = res.Messages.map((msg: any) => {
-        const parsedStream = msg.Tags.find((tag: any) => tag.name === 'Streams');
+
+      const [parsedPosts] = res.Messages.map((msg: any) => {
+        const parsedStream = msg.Tags.find(
+          (tag: any) => tag.name === "Streams"
+        );
         return parsedStream ? JSON.parse(parsedStream.value) : {};
       });
       console.log(parsedPosts);
-      
+
       setData(parsedPosts);
+      setTableData(parsedPosts.sent);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-  }  
+  }
 
   useEffect(() => {
     fetchData();
@@ -65,6 +77,8 @@ export default function HistoryPage() {
         width,
         opacity: 1,
       });
+
+      setTableData(data.received);
     }
 
     if (tabName === "Outgoing Streams") {
@@ -74,12 +88,13 @@ export default function HistoryPage() {
         width,
         opacity: 1,
       });
+      setTableData(data.sent);
     }
 
     setSelectedTab(tabName);
   }
   console.log(data);
-  
+
   return (
     <div className="flex w-full h-full py-10 relative flex-1 flex-col bg-aovest-bg text-white justify-start">
       <div className="max-w-[1180px] gap-4 mx-auto w-full h-full flex flex-col flex-1">
@@ -127,7 +142,12 @@ export default function HistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((stream: any, index: number) => (
+                {!tableData.length && (
+                  <tr className="bg-aovest-bg text-white text-xs border-b-[2px] border-[#2A3041]">
+                    <td colSpan={7} className="px-3 py-16 text-center text-2xl font-light">No streams</td>
+                  </tr>
+                )}
+                {tableData.map((stream: any, index: number) => (
                   <tr
                     className="bg-aovest-bg text-white text-xs border-b-[2px] border-[#2A3041]"
                     key={index}
@@ -136,18 +156,28 @@ export default function HistoryPage() {
                     <td className="px-3 py-[6px]">{stream.StreamId}</td>
                     <td className="px-3 py-[6px]">
                       <div className="flex flex-col items-center">
-                        <span>{new Date(stream.Stream.StartTime).toLocaleDateString()}</span>
+                        <span>
+                          {new Date(
+                            stream.Stream.StartTime
+                          ).toLocaleDateString()}
+                        </span>
                         <span className="text-[10px] text-gray-400">
-                          {new Date(stream.Stream.StartTime).toLocaleTimeString()}
+                          {new Date(
+                            stream.Stream.StartTime
+                          ).toLocaleTimeString()}
                         </span>
                       </div>
                     </td>
-                    <td className="px-3 py-[6px]">{stream.VestingPeriod / (1000 * 60)} Minutes</td>
+                    <td className="px-3 py-[6px]">
+                      {stream.VestingPeriod / (1000 * 60)} Minutes
+                    </td>
                     <td className="px-3 py-[6px]">{stream.Stream.Recipient}</td>
                     <td className="px-3 py-[6px] text-yellow-300">
                       {stream.Status}
                     </td>
-                    <td className="px-3 py-[6px]">{stream.Quantity}</td>
+                    <td className="px-3 py-[6px]">
+                      {stream.Stream.TotalSent}/{stream.Quantity}
+                    </td>
                   </tr>
                 ))}
               </tbody>

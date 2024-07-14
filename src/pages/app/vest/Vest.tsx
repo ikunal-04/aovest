@@ -13,12 +13,18 @@ import { FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { PROCESS_ID } from "@/helpers/constants";
 
-import { result, message, createDataItemSigner, } from "@permaweb/aoconnect"
+import {
+  result,
+  message,
+  createDataItemSigner,
+  dryrun,
+} from "@permaweb/aoconnect";
 import { useActiveAddress } from "@arweave-wallet-kit-beta/react";
+import toast from "react-hot-toast";
 
 declare global {
   interface Window {
-      arweaveWallet: any;
+    arweaveWallet: any;
   }
 }
 
@@ -38,6 +44,8 @@ const schema = yup
   .required();
 
 export default function VestPage() {
+  const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
+  const [balance, setBalance] = React.useState<number | null>(null);
   const [vestData, setVestData] = React.useState<null | yup.InferType<
     typeof schema
   >>(null);
@@ -61,6 +69,15 @@ export default function VestPage() {
   const watchVestingStartDate = watch("vestingStartDate", 0);
 
   function handleVestingSubmit(data: yup.InferType<typeof schema>) {
+    if (balance !== null && balance < +data.totalTokenToVest) {
+      toast.error("Insufficient tokens to vest.");
+      return;
+    }
+    if (balance === null) {
+      toast.error("Failed to fetch token balance. Refresh and try again.");
+      return;
+    }
+
     setVestData(data);
   }
 
@@ -88,17 +105,16 @@ export default function VestPage() {
   async function handleConfirmVestSubmission() {
     // submit to process via aoconnect
     if (vestData) {
-
       const totalVestingPeriodInMillis = convertToMilli(
         vestData.totalVestingPeriod,
         vestData.vestingDuration
-      )
+      );
 
       const updatedData = {
         ...vestData,
         totalVestingPeriod: totalVestingPeriodInMillis,
       };
-      
+      setIsSubmitting(true);
       const res = await message({
         process: PROCESS_ID,
         tags: [
@@ -107,7 +123,10 @@ export default function VestPage() {
           { name: "Recipient", value: updatedData.receiverAddress },
           { name: "Quantity", value: updatedData.totalTokenToVest },
           { name: "StartTime", value: updatedData.vestingStartDate.toString() },
-          { name: "VestingPeriod", value: updatedData.totalVestingPeriod.toString() },
+          {
+            name: "VestingPeriod",
+            value: updatedData.totalVestingPeriod.toString(),
+          },
         ],
         data: "",
         signer: createDataItemSigner(window.arweaveWallet),
@@ -118,13 +137,12 @@ export default function VestPage() {
         process: PROCESS_ID,
         message: res,
       });
-  
+
       console.log("Registered successfully", registerResult);
       // console.log(registerResult.Messages[0].Tags[8].value);
 
-      if(registerResult.Messages[0].Tags[8].value === "CreateStream-Success"){
-        alert("Vesting Schedule Created Successfully");
-
+      if (registerResult.Messages[0].Tags[8].value === "CreateStream-Success") {
+        toast.success("Vesting Schedule Created Successfully");
       }
     }
 
@@ -132,12 +150,10 @@ export default function VestPage() {
 
     const processStream = await message({
       process: PROCESS_ID,
-      tags: [
-        {name: "Action", value: "Cron"}
-      ],
+      tags: [{ name: "Action", value: "Cron" }],
       data: "",
       signer: createDataItemSigner(window.arweaveWallet),
-    })
+    });
 
     console.log("Process Stream", processStream);
     const processResult = await result({
@@ -147,7 +163,10 @@ export default function VestPage() {
 
     console.log("Process Stream Result", processResult);
 
-    if(processResult.Messages[0].Tags[7].value == 'Scheduled' || processResult.Messages[0].Tags[7].value == 'InProgress'){
+    if (
+      processResult.Messages[0].Tags[7].value == "Scheduled" ||
+      processResult.Messages[0].Tags[7].value == "InProgress"
+    ) {
       // alert("Vesting Created Successfully");
       // await monitor({
       //   process: PROCESS_ID,
@@ -160,6 +179,8 @@ export default function VestPage() {
       //   signer: createDataItemSigner(window.arweaveWallet),
       // })
     }
+    setIsSubmitting(false);
+
     navigate("/app/history");
   }
 
@@ -175,6 +196,30 @@ export default function VestPage() {
 
   const watchSuperToken = watch("token", "Select your token");
   const watchVestingPeriodCalendar = watch("vestingDuration", "year");
+
+  React.useEffect(() => {
+    if (watchSuperToken && watchSuperToken === "VCoin") {
+      //
+      fetchTokenBalance();
+    }
+  }, [watchSuperToken]);
+
+  async function fetchTokenBalance() {
+    const res = await dryrun({
+      process: PROCESS_ID,
+      data: "",
+      tags: [
+        { name: "Action", value: "Balance" },
+        { name: "Target", value: activeAddress || "" },
+      ],
+    });
+    const [balance] = res.Messages.map((msg: any) => {
+      const parsedStream = msg.Tags.find((tag: any) => tag.name === "Balance");
+      return parsedStream ? JSON.parse(parsedStream.value) : {};
+    });
+
+    setBalance(balance);
+  }
 
   const CustomDatePickerInput = React.forwardRef<any, any>(
     ({ onClick, date }, ref) => {
@@ -234,9 +279,16 @@ export default function VestPage() {
 
               <div className="flex w-full justify-between gap-[30px]">
                 <div className="flex flex-col gap-2 w-[50%]">
-                  <label className="text-white text-base leading-[20px]">
-                    Select Token
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-white text-base leading-[20px]">
+                      Select Token
+                    </label>
+                    {balance !== null && (
+                      <span className="text-base text-white">
+                        Balance: {balance}
+                      </span>
+                    )}
+                  </div>
 
                   <Select
                     options={tokenOptions}
@@ -324,6 +376,7 @@ export default function VestPage() {
                     Total Tokens to Vest
                   </label>
                   <input
+                    disabled={balance !== null && balance === 0}
                     {...register("totalTokenToVest")}
                     className="text-base placeholder:text-[#6369A6] rounded-[10px] bg-aovest-bg border-[1px] border-aovest-primary py-[14px] px-[14px]"
                     type="text"
@@ -474,6 +527,7 @@ export default function VestPage() {
             </div>
             <div className="w-full flex justify-center items-center">
               <button
+                disabled={isSubmitting}
                 onClick={handleConfirmVestSubmission}
                 className="bg-aovest-primary text-white border-[0.5px] border-aovest-neutralTwo rounded-[64px] px-10 py-3 text-base"
               >
