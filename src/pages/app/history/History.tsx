@@ -1,12 +1,16 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion } from "framer-motion";
+import { dryrun } from "@permaweb/aoconnect";
+import { PROCESS_ID } from "@/helpers/constants";
+import { useActiveAddress } from "@arweave-wallet-kit-beta/react";
 
 export default function HistoryPage() {
   const tabRef1 = React.useRef<null | HTMLLIElement>(null);
   const tabRef2 = React.useRef<null | HTMLLIElement>(null);
-  const [, setSelectedTab] = React.useState<
-    "Outgoing Streams" | "Incoming Streams"
-  >("Outgoing Streams");
+  const [data, setData] = React.useState<object[]>([]);
+  const activeAddress = useActiveAddress();
+
+  const [, setSelectedTab] = React.useState<"Outgoing Streams" | "Incoming Streams">("Outgoing Streams");
   const [position, setPosition] = React.useState({
     left: 0,
     width: 0,
@@ -24,6 +28,33 @@ export default function HistoryPage() {
     });
   }, []);
 
+  async function fetchData() {
+    try {
+      const res = await dryrun({
+        process: PROCESS_ID,
+        data: "",
+        tags: [
+          { name: "Action", value: "GetStreamsByUser" },
+          { name: "UserId", value: activeAddress || "" }
+        ],
+      });
+  
+      const[parsedPosts]  = res.Messages.map((msg: any) => {
+        const parsedStream = msg.Tags.find((tag: any) => tag.name === 'Streams');
+        return parsedStream ? JSON.parse(parsedStream.value) : {};
+      });
+      console.log(parsedPosts);
+      
+      setData(parsedPosts);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  }  
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   function changeTab(tabName: "Outgoing Streams" | "Incoming Streams") {
     if (!tabRef1.current || !tabRef2.current) return;
 
@@ -38,7 +69,6 @@ export default function HistoryPage() {
 
     if (tabName === "Outgoing Streams") {
       const { width } = tabRef1.current.getBoundingClientRect();
-
       setPosition({
         left: tabRef1.current.offsetLeft,
         width,
@@ -48,7 +78,8 @@ export default function HistoryPage() {
 
     setSelectedTab(tabName);
   }
-
+  console.log(data);
+  
   return (
     <div className="flex w-full h-full py-10 relative flex-1 flex-col bg-aovest-bg text-white justify-start">
       <div className="max-w-[1180px] gap-4 mx-auto w-full h-full flex flex-col flex-1">
@@ -96,28 +127,29 @@ export default function HistoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {Array(5)
-                  .fill(0)
-                  .map(() => (
-                    <tr className="bg-aovest-bg text-white text-xs border-b-[2px] border-[#2A3041]">
-                      <td className="px-3 py-[6px]">VCOIN</td>
-                      <td className="px-3 py-[6px]">5DNflw....XlU498</td>
-                      <td className="px-3 py-[6px]">
-                        <div className="flex flex-col items-center">
-                          <span>09/12/24</span>
-                          <span className="text-[10px] text-gray-400">
-                            11:53:06
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-[6px]">3 Years</td>
-                      <td className="px-3 py-[6px]">5DNflw....XlU498</td>
-                      <td className="px-3 py-[6px] text-yellow-300">
-                        In Progress
-                      </td>
-                      <td className="px-3 py-[6px]">400/5000</td>
-                    </tr>
-                  ))}
+                {data.map((stream: any, index: number) => (
+                  <tr
+                    className="bg-aovest-bg text-white text-xs border-b-[2px] border-[#2A3041]"
+                    key={index}
+                  >
+                    <td className="px-3 py-[6px]">VCOIN</td>
+                    <td className="px-3 py-[6px]">{stream.StreamId}</td>
+                    <td className="px-3 py-[6px]">
+                      <div className="flex flex-col items-center">
+                        <span>{new Date(stream.Stream.StartTime).toLocaleDateString()}</span>
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(stream.Stream.StartTime).toLocaleTimeString()}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-[6px]">{stream.VestingPeriod / (1000 * 60)} Minutes</td>
+                    <td className="px-3 py-[6px]">{stream.Stream.Recipient}</td>
+                    <td className="px-3 py-[6px] text-yellow-300">
+                      {stream.Status}
+                    </td>
+                    <td className="px-3 py-[6px]">{stream.Quantity}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             <div className="w-full bg-[#2A3041] py-[15px] flex justify-center items-center rounded-b-[10px]">

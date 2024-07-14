@@ -2,7 +2,7 @@
 -- VestAO Process Name
 local json = require('json')
 
-if not Balances then Balances = { [ao.id] = 100000 } end
+if not Balances then Balances = { [ao.id] = tonumber(100000) } end
 
 if Name ~= 'VestCoin' then Name = 'VestCoin' end
 
@@ -10,32 +10,36 @@ if Ticker ~= 'VCOIN' then Ticker = 'VCOIN' end
 
 if Symbol ~= 'VCOIN' then Symbol = 'VCOIN' end
 
-if Logo ~= 'https://arweave.net/2tDzQtngmg39dmOvqD0av5K0j6VeWP0YmMqPQIyXgI8' then Logo = 'some image' end
+if Logo ~= 'https://arweave.net/2tDzQtngmg39dmOvqD0av5K0j6VeWP0YmMqPQIyXgI8' then Logo = 'https://arweave.net/2tDzQtngmg39dmOvqD0av5K0j6VeWP0YmMqPQIyXgI8' end
+
+if Denomination ~= 0 then Denomination = 0 end
 
 StreamId = tostring(0)
 
 Handlers.add('createStream', Handlers.utils.hasMatchingTag('Action', 'CreateStream'), function(msg)
-  if not msg.Tags.Recipient or not msg.Tags.Quantity or not msg.Tags.StartTime or not msg.Tags.VestingPeriod then
+  if not msg.Tags.Sender or not msg.Tags.Recipient or not msg.Tags.Quantity or not msg.Tags.StartTime or not msg.Tags.VestingPeriod then
     return ao.send({
       Target = ao.id,
       Tags = {
         Action = 'CreateStream-Error',
-        Error = 'Recipient, Quantity, StartTime, and VestingPeriod are required'
+        Error = 'Sender, Recipient, Quantity, StartTime, and VestingPeriod are required'
       }
     })
   end
 
+  assert(type(msg.Tags.Sender) == 'string', 'Sender is required!')
   assert(type(msg.Tags.Recipient) == 'string', 'Recipient is required!')
   assert(type(msg.Tags.Quantity) == 'string', 'Quantity is required!')
   assert(type(msg.Tags.StartTime) == 'string', 'StartTime is required!')
   assert(type(msg.Tags.VestingPeriod) == 'string', 'VestingPeriod is required!')
 
+  local sender = msg.Tags.Sender
   local recipient = msg.Tags.Recipient
   local quantity = tonumber(msg.Tags.Quantity)
   local startTime = tonumber(msg.Tags.StartTime)
   local vestingPeriod = tonumber(msg.Tags.VestingPeriod)
   local currentTime = tonumber(msg.Timestamp)
-  local endTime = startTime + vestingPeriod
+  local endTime = startTime + vestingPeriod + 60000
 
   -- Check for the correct types and values
   print('Current Time: '.. currentTime)
@@ -71,7 +75,7 @@ Handlers.add('createStream', Handlers.utils.hasMatchingTag('Action', 'CreateStre
 
   -- Create the stream
   Streams[StreamId] = {
-    Sender = ao.id,
+    Sender = sender,
     Recipient = recipient,
     Quantity = quantity,
     StartTime = startTime,
@@ -142,6 +146,9 @@ Handlers.add('processStream', Handlers.utils.hasMatchingTag('Action', 'ProcessSt
     local streamId = tostring(streamId)
     print('Stream totalsent: '.. stream.TotalSent)
     print('Stream quantity: '.. stream.Quantity)
+    if stream.TotalSent == stream.Quantity then
+      stream.Status = 'Complete'
+    end
     return ao.send({
       Target = ao.id,
       Tags = {
@@ -155,12 +162,13 @@ Handlers.add('processStream', Handlers.utils.hasMatchingTag('Action', 'ProcessSt
 
   -- Calculate the amount to transfer
   local timeElapsed = currentTime - stream.StartTime
-  local amountToTransfer = math.min(stream.Quantity, math.floor(stream.FlowRate * timeElapsed) - stream.TotalSent)
+  local amountToTransfer = math.min(stream.Quantity - stream.TotalSent, math.floor(stream.FlowRate * timeElapsed) - stream.TotalSent)
 
   -- Transfer tokens
   if amountToTransfer > 0 then
     ao.send({
       Target = ao.id,
+      From = msg.From,
       Tags = {
         Action = 'Transfer',
         Recipient = stream.Recipient,
@@ -195,8 +203,8 @@ Handlers.add(
   "CronTick", -- handler name
   Handlers.utils.hasMatchingTag("Action", "Cron"), -- handler pattern to identify cron message
   function (msg) -- handler task to execute on cron message
-    local currentTime = tonumber(msg.Timestamp)
-    print('CronTick Current Time: '.. currentTime)
+    -- local currentTime = tonumber(msg.Timestamp)
+    -- print('CronTick Current Time: '.. currentTime)
     local stream = Streams[CaptureCurrentStreamId]  -- assuming StreamId is the current stream to process
     if stream then
       ao.send({
@@ -211,32 +219,53 @@ Handlers.add(
   end
 )
 
-Handlers.add('getStream', Handlers.utils.hasMatchingTag('Action', 'GetStream'), function(msg)
-  if not msg.Tags.StreamId then
+Handlers.add('getStreamsByUser', Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'), function(msg)
+  
+  if not msg.Tags.UserId then
     return ao.send({
       Target = ao.id,
       Tags = {
-        Action = 'GetStream-Error',
-        Error = 'StreamId is required'
+        Action = 'GetStreamsByUser-Error',
+        Error = 'UserId is required'
       }
     })
   end
 
-  assert(type(msg.Tags.StreamId) == 'string', 'StreamId is required!')
+  assert(type(msg.Tags.UserId) == 'string', 'UserId is required!')
 
-  local streamId = tonumber(msg.Tags.StreamId)
-  local stream = Streams[streamId]
+  local userId = msg.Tags.UserId
+  local userStreams = {}
 
-  -- Check if the stream exists
-  assert(stream, 'Stream not found')
+  for streamId, stream in pairs(Streams) do
+    print('Stream Sender: '.. stream.Sender)
+    if stream.Sender == userId then
+      table.insert(userStreams, {
+        StreamId = streamId,
+        Stream = stream,
+        Status = stream.Status,
+        VestingPeriod = tostring(stream.VestingPeriod),
+        Quantity = tostring(stream.Quantity)
+      })
+    end
+  end
+  print('User Streams: '.. json.encode(userStreams))
 
-  local streamId = tostring(streamId)
-  return ao.send({
+  -- Check if user has created any streams
+  if #userStreams == 0 then
+    return ao.send({
+      Target = ao.id,
+      Tags = {
+        Action = 'GetStreamsByUser-Error',
+        Error = 'No streams found for the user'
+      }
+    })
+  end
+
+  ao.send({
     Target = ao.id,
     Tags = {
-      Action = 'GetStream-Success',
-      StreamId = streamId,
-      Stream = json.encode(stream)
+      Action = 'GetStreamsByUser-Success',
+      Streams = json.encode(userStreams)
     }
   })
 end)
@@ -268,22 +297,6 @@ Handlers.add('readStream', Handlers.utils.hasMatchingTag('Action', 'ReadStream')
       Action = 'ReadStream-Success',
       StreamId = streamId,
       Stream = json.encode(stream)
-    }
-  })
-end)
-
-Handlers.add('currentTime', Handlers.utils.hasMatchingTag('Action', 'CurrentTime'), function(msg)
-  local currentTime = tonumber(msg.Timestamp)
-  local newTime = currentTime + 19800000
-  print('Current Time: ', currentTime)
-  print('New Time: ', newTime)
-
-  return ao.send({
-    Target = ao.id,
-    Tags = {
-      Action = 'CurrentTime-Success',
-      CurrentTime = tostring(msg.Timestamp),
-      NewTime = tostring(newTime)
     }
   })
 end)

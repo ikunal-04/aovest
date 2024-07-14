@@ -11,8 +11,10 @@ import clsx from "clsx";
 import { format } from "date-fns";
 import { FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
+import { PROCESS_ID } from "@/helpers/constants";
 
-import { result, message, createDataItemSigner, monitor, unmonitor } from "@permaweb/aoconnect"
+import { result, message, createDataItemSigner, } from "@permaweb/aoconnect"
+import { useActiveAddress } from "@arweave-wallet-kit-beta/react";
 
 declare global {
   interface Window {
@@ -54,21 +56,12 @@ export default function VestPage() {
     },
   });
   const navigate = useNavigate();
+  const activeAddress = useActiveAddress();
 
   const watchVestingStartDate = watch("vestingStartDate", 0);
 
   function handleVestingSubmit(data: yup.InferType<typeof schema>) {
-    const totalVestingPeriodInMillis = convertToMilli(
-      data.totalVestingPeriod,
-      data.vestingDuration
-    )
-
-    const updatedData = {
-      ...data,
-      totalVestingPeriod: totalVestingPeriodInMillis,
-    };
-
-    setVestData(updatedData);
+    setVestData(data);
   }
 
   function convertToMilli(value: number, unit: string): number {
@@ -92,18 +85,29 @@ export default function VestPage() {
     }
   }
 
-  const processId = "pRJJA2E9-2Rjm_TWo13yaOa8pIxMi55vhM4fOZwq1qI";
   async function handleConfirmVestSubmission() {
     // submit to process via aoconnect
     if (vestData) {
+
+      const totalVestingPeriodInMillis = convertToMilli(
+        vestData.totalVestingPeriod,
+        vestData.vestingDuration
+      )
+
+      const updatedData = {
+        ...vestData,
+        totalVestingPeriod: totalVestingPeriodInMillis,
+      };
+      
       const res = await message({
-        process: processId,
+        process: PROCESS_ID,
         tags: [
           { name: "Action", value: "CreateStream" },
-          { name: "Recipient", value: vestData.receiverAddress },
-          { name: "Quantity", value: vestData.totalTokenToVest },
-          { name: "StartTime", value: vestData.vestingStartDate.toString() },
-          { name: "VestingPeriod", value: vestData.totalVestingPeriod.toString() },
+          { name: "Sender", value: activeAddress || "" },
+          { name: "Recipient", value: updatedData.receiverAddress },
+          { name: "Quantity", value: updatedData.totalTokenToVest },
+          { name: "StartTime", value: updatedData.vestingStartDate.toString() },
+          { name: "VestingPeriod", value: updatedData.totalVestingPeriod.toString() },
         ],
         data: "",
         signer: createDataItemSigner(window.arweaveWallet),
@@ -111,24 +115,23 @@ export default function VestPage() {
       console.log("Vesting form submitted", res);
 
       const registerResult = await result({
-        process: processId,
+        process: PROCESS_ID,
         message: res,
       });
   
-      // console.log("Registered successfully", registerResult);
+      console.log("Registered successfully", registerResult);
       // console.log(registerResult.Messages[0].Tags[8].value);
 
       if(registerResult.Messages[0].Tags[8].value === "CreateStream-Success"){
         alert("Vesting Schedule Created Successfully");
-        navigate("/app/history");
+
       }
-      
     }
 
     // console.log({ vestData });
 
     const processStream = await message({
-      process: processId,
+      process: PROCESS_ID,
       tags: [
         {name: "Action", value: "Cron"}
       ],
@@ -138,25 +141,26 @@ export default function VestPage() {
 
     console.log("Process Stream", processStream);
     const processResult = await result({
-      process: processId,
+      process: PROCESS_ID,
       message: processStream,
     });
 
     console.log("Process Stream Result", processResult);
 
     if(processResult.Messages[0].Tags[7].value == 'Scheduled' || processResult.Messages[0].Tags[7].value == 'InProgress'){
-      alert("Vesting Created Successfully");
-      await monitor({
-        process: processId,
-        signer: createDataItemSigner(window.arweaveWallet),
-      });
+      // alert("Vesting Created Successfully");
+      // await monitor({
+      //   process: PROCESS_ID,
+      //   signer: createDataItemSigner(window.arweaveWallet),
+      // });
     } else {
-      alert("Vesting Completed Successfully");
-      await unmonitor({
-        process: processId,
-        signer: createDataItemSigner(window.arweaveWallet),
-      })
+      // alert("Vesting Completed Successfully");
+      // await unmonitor({
+      //   process: PROCESS_ID,
+      //   signer: createDataItemSigner(window.arweaveWallet),
+      // })
     }
+    navigate("/app/history");
   }
 
   const tokenOptions = [{ value: "VCoin", label: "VCoin" }];
