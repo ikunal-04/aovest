@@ -1,5 +1,5 @@
 import { Toaster } from "react-hot-toast";
-import { HashRouter, Route, Routes } from "react-router-dom";
+import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import AppLayout from "./layouts/AppLayout";
 import Landing from "./pages/landing/Landing";
@@ -26,10 +26,10 @@ function App() {
           path="/app/vest"
           element={
             <PrivateRoute>
-            <AppLayout>
-              <VestPage />
-            </AppLayout>
-          </PrivateRoute>
+              <AppLayout>
+                <VestPage />
+              </AppLayout>
+            </PrivateRoute>
           }
         />
         <Route
@@ -42,7 +42,6 @@ function App() {
             </PrivateRoute>
           }
         />
-
         <Route
           path="/404"
           element={
@@ -51,12 +50,19 @@ function App() {
             </AppLayout>
           }
         />
-
-        <Route 
-          path="/not-found"
+        <Route
+          path="/not-connected"
           element={
             <AppLayout>
               <NotFound />
+            </AppLayout>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <AppLayout>
+              <Navigate to="/404" />
             </AppLayout>
           }
         />
@@ -64,7 +70,6 @@ function App() {
 
       <Toaster position="bottom-center" />
     </HashRouter>
-  )
+  );
 }
-
-export default App
+export default App;
