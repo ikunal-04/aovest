@@ -10,7 +10,7 @@ export default function PrivateRoute({ children }: Props) {
   const [address] = useGlobalStore((state) => [state.authState.address]);
 
   if (!address) {
-    return <Navigate to="/404" />;
+    return <Navigate to="/not-found" />;
   }
 
   return <>{children}</>;

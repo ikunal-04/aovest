@@ -18,7 +18,7 @@ export default function Navbar() {
     >
       <div className="flex items-center">
         <Link to={"/"}>
-          <SVG src="/logo.svg" />
+          <SVG src="https://arweave.net/vLqfYGXpWmgcun_YTA3NyI1H38ZRRnlZoTRvJ4RUaJ8/logo.svg" />
         </Link>
       </div>
       <div className="flex items-center gap-4">

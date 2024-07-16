@@ -53,7 +53,16 @@ Handlers.add('user-mint', Handlers.utils.hasMatchingTag('Action', 'User-Mint'), 
  end
 
  Balances[ao.id] = Balances[ao.id] - quantity
+ print(Balances[ao.id])
  Balances[msg.From] = (Balances[msg.From] or 0) + quantity
+--  ao.send({
+--   Target = ao.id, 
+--   Tags = { 
+--     Action = "Transfer", 
+--     Recipient = msg.From, 
+--     Quantity = quantity 
+--   }
+--  })
  print('Minted: ' .. quantity .. ' to ' .. msg.From)
  ao.send({
    Target = msg.From,

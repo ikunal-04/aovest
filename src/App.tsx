@@ -7,6 +7,7 @@ import VestPage from "./pages/app/vest/Vest";
 import HistoryPage from "./pages/app/history/History";
 import NotFound404Page from "./pages/404/NotFound404Page";
 import PrivateRoute from "./components/PrivateRoute";
+import NotFound from "./pages/notfound/NotFound";
 
 function App() {
   return (
@@ -47,6 +48,15 @@ function App() {
           element={
             <AppLayout>
               <NotFound404Page />
+            </AppLayout>
+          }
+        />
+
+        <Route 
+          path="/not-found"
+          element={
+            <AppLayout>
+              <NotFound />
             </AppLayout>
           }
         />

@@ -184,6 +184,26 @@ export default function VestPage() {
     navigate("/app/history");
   }
 
+  async function handleMintSubmit() {
+    // submit to process via aoconnect
+    const response = await message({
+      process: PROCESS_ID,
+      tags: [{ name: "Action", value: "User-Mint" }],
+      signer: createDataItemSigner(window.arweaveWallet),
+    });
+
+    console.log("Mint response", response);
+    const mintResult = await result({
+      process: PROCESS_ID,
+      message: response,
+    });
+
+    console.log("Mint Result", mintResult);
+    if (mintResult.Messages[0].Tags[7].value === "Mint-Success") {
+      toast.success("VCOIN Minted Successfully");
+    }
+  }
+
   const tokenOptions = [{ value: "VCoin", label: "VCoin" }];
   const periodOptions = [
     { value: "minute", label: "minute(s)" },
@@ -454,7 +474,10 @@ export default function VestPage() {
                 </div>
               </div>
             </div>
-            <div className="w-full flex justify-center items-center">
+            <div className="w-full flex justify-center items-center gap-9">
+              <button onClick={handleMintSubmit} className="px-[34px] py-[10px] text-lg leading-[21px] rounded-[64px] bg-[#020014] text-white border-[1.5px] border-aovest-neutralTwo">
+                Mint
+              </button>
               <button
                 onClick={handleSubmit(handleVestingSubmit)}
                 className="bg-aovest-primary text-white border-[0.5px] border-aovest-neutralTwo rounded-[64px] px-10 py-3 text-base"
