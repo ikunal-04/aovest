@@ -1,5 +1,3 @@
--- processID:  Is9sY9sr-X9jcAzmHYfjMN8wufjqhnz2OnARiD8GYmo
--- VestAO Process Name
 local json = require('json')
 
 if not Balances then Balances = { [ao.id] = tonumber(100000) } end
@@ -324,18 +322,17 @@ Handlers.add('getStreamsByUser', Handlers.utils.hasMatchingTag('Action', 'GetStr
             Streams = json.encode(streams)
         }
     })
-end)Handlers.add('getStreamsByUser',
-             Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'),
-             function(msg)
+end)
 
+Handlers.add('getStreamsByUser', Handlers.utils.hasMatchingTag('Action', 'GetStreamsByUser'),function(msg)
     if not msg.Tags.UserId then
-        return ao.send({
-            Target = ao.id,
-            Tags = {
-                Action = 'GetStreamsByUser-Error',
-                Error = 'UserId is required'
-            }
-        })
+      return ao.send({
+          Target = ao.id,
+          Tags = {
+              Action = 'GetStreamsByUser-Error',
+              Error = 'UserId is required'
+          }
+      })
     end
 
     assert(type(msg.Tags.UserId) == 'string', 'UserId is required!')
